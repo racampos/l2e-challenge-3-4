@@ -1,28 +1,15 @@
 import "reflect-metadata";
 import { TestingAppChain } from "@proto-kit/sdk";
-import {
-  SpyMaster, Agent, AgentId, Message, SecurityCode
-} from "./SpyMaster";
-import {
-  Field,
-  PrivateKey,
-  Nullifier,
-  MerkleMap,
-  Poseidon,
-  Bool,
-  Character,
-  UInt64,
-} from "o1js";
+import { SpyMaster, Agent, AgentId, Message, SecurityCode } from "./SpyMaster";
+import { Field, PrivateKey, MerkleMap, Poseidon, Bool, UInt64 } from "o1js";
 import { Balances } from "./Balances";
-import { Pickles } from "o1js/dist/node/snarky";
-import { dummyBase64Proof } from "o1js/dist/node/lib/proof_system";
-
 
 describe("SpyMaster", () => {
   let appChain: TestingAppChain<{
     SpyMaster: typeof SpyMaster;
     Balances: typeof Balances;
   }>;
+
   let spymaster: SpyMaster;
   let balances: Balances;
 
@@ -55,18 +42,28 @@ describe("SpyMaster", () => {
 
   it("should add an agent", async () => {
     const tx = appChain.transaction(alice, () => {
-      spymaster.addAgent(AgentId.from(0), new SecurityCode({ char0: new Field(97), char1: new Field(98) }));
+      spymaster.addAgent(
+        AgentId.from(0),
+        new SecurityCode({ char0: new Field(97), char1: new Field(98) }),
+      );
     });
     await tx.sign();
     await tx.send();
     await appChain.produceBlock();
 
-    const agent = await appChain.query.runtime.SpyMaster.agents.get(AgentId.from(0));
-    expect(agent).toEqual(new Agent({
-      agentId: AgentId.from(0),
-      lastMessage: UInt64.from(0),
-      securityCode: new SecurityCode({ char0: new Field(97), char1: new Field(98) }),
-    }));
+    const agent = await appChain.query.runtime.SpyMaster.agents.get(
+      AgentId.from(0),
+    );
+    expect(agent).toEqual(
+      new Agent({
+        agentId: AgentId.from(0),
+        lastMessage: UInt64.from(0),
+        securityCode: new SecurityCode({
+          char0: new Field(97),
+          char1: new Field(98),
+        }),
+      }),
+    );
   });
 
   it("should process a message", async () => {
@@ -79,7 +76,10 @@ describe("SpyMaster", () => {
       messageNumber: UInt64.from(1),
       agentId: AgentId.from(0),
       body: asciiFields,
-      securityCode: new SecurityCode({ char0: new Field(97), char1: new Field(98) }),
+      securityCode: new SecurityCode({
+        char0: new Field(97),
+        char1: new Field(98),
+      }),
     });
     const tx = appChain.transaction(alice, () => {
       spymaster.processMessage(message);
@@ -88,13 +88,15 @@ describe("SpyMaster", () => {
     await tx.sign();
     await tx.send();
 
-    await appChain.produceBlock();
+    let block = await appChain.produceBlock();
 
-    const agent = await appChain.query.runtime.SpyMaster.agents.get(AgentId.from(0));
-    if (agent) {
-      expect(agent.lastMessage).toEqual(UInt64.from(1));
-    }
+    expect(block).toBeTruthy();
+    expect(block?.txs[0]?.status).toBeTruthy();
+
+    const agent = await appChain.query.runtime.SpyMaster.agents.get(
+      AgentId.from(0),
+    );
+
+    if (agent) expect(agent.lastMessage).toEqual(UInt64.from(1));
   });
-
-
 });
