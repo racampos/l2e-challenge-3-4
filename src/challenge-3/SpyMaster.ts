@@ -66,11 +66,15 @@ export class SpyMaster extends RuntimeModule<SpyMasterConfig> {
       ),
       "Security code does not match",
     );
-
-    assert(UInt64.from(message.body.length).equals(UInt64.from(12)));
-    assert(message.messageNumber.greaterThan(agent.lastMessage));
+    assert(
+      UInt64.from(message.body.length).equals(UInt64.from(12)),
+      "Message length is not 12 characters",
+    );
+    assert(
+      message.messageNumber.greaterThan(agent.lastMessage),
+      "Message number is not greater than the last message number",
+    );
 
     this.setLastMessage(message.agentId, message.messageNumber);
   }
 }
-
