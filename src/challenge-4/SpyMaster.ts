@@ -39,19 +39,7 @@ export class Agent extends Struct({
   agentId: AgentId,
   lastMessage: UInt64,
   securityCode: SecurityCode,
-}) {
-  constructor(
-    agentId: AgentId,
-    lastMessage: UInt64,
-    securityCode: SecurityCode,
-  ) {
-    super({
-      agentId,
-      lastMessage,
-      securityCode,
-    });
-  }
-}
+}) {}
 
 // ZkProgram
 export const PrivateMessage = Experimental.ZkProgram({
@@ -100,18 +88,22 @@ export class SpyMaster extends RuntimeModule<SpyMasterConfig> {
     // Verify the proof of message validity
     privateMessageProof.verify();
     const agent = this.agents.get(agentId).value;
-    const newAgent = new Agent(
-      agent.agentId,
-      privateMessageProof.publicOutput,
-      agent.securityCode,
-    );
+    const newAgent = new Agent({
+      agentId: agent.agentId,
+      lastMessage: privateMessageProof.publicOutput,
+      securityCode: agent.securityCode,
+    });
     this.agents.set(agentId, newAgent);
   }
 
   // Auxiliary method to add an agent for testing purposes
   @runtimeMethod()
   public addAgent(agentId: AgentId, securityCode: SecurityCode) {
-    this.agents.set(agentId, new Agent(agentId, UInt64.from(0), securityCode));
+    this.agents.set(agentId, new Agent({
+        agentId: agentId,
+        lastMessage: UInt64.from(0),
+        securityCode: securityCode
+    }));
   }
 }
 
@@ -139,11 +131,11 @@ export class ExtendedSpyMaster extends SpyMaster {
       transactionSender: this.transaction.sender,
       senderNonce: this.transaction.nonce,
     });
-    const newAgent = new Agent(
-      agent.agentId,
-      privateMessageProof.publicOutput,
-      agent.securityCode,
-    );
+    const newAgent = new Agent({
+      agentId: agent.agentId,
+      lastMessage: privateMessageProof.publicOutput,
+      securityCode: agent.securityCode,
+    });
     this.agents.set(agentId, newAgent);
     this.agentToBlockInfo.set(agentId, block);
     this.blockHeights.set(block.blockHeight, agentId);
@@ -157,8 +149,11 @@ export class ExtendedSpyMaster extends SpyMaster {
       transactionSender: this.transaction.sender,
       senderNonce: this.transaction.nonce,
     });
-    this.agents.set(agentId, new Agent(agentId, UInt64.from(0), securityCode));
-
+    this.agents.set(agentId, new Agent({
+        agentId: agentId,
+        lastMessage: UInt64.from(0),
+        securityCode: securityCode
+    }));
     this.agentToBlockInfo.set(agentId, block);
   }
 }
