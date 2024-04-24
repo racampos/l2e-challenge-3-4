@@ -46,18 +46,34 @@ import {
     agentId: AgentId,
     lastMessage: UInt64,
     securityCode: SecurityCode,
-    blockInfo: BlockInfo,
-  }) {}
+  }) {
+    constructor(agentId: AgentId, lastMessage: UInt64, securityCode: SecurityCode) {
+        super({
+            agentId,
+            lastMessage,
+            securityCode,
+        });
+    }
+  }
+
+
+export class ExtendedAgent extends Agent {
+    blockInfo: BlockInfo;
+    constructor(agentId: AgentId, lastMessage: UInt64, securityCode: SecurityCode, blockInfo: BlockInfo) {
+        super(agentId, lastMessage, securityCode);
+        this.blockInfo = blockInfo;
+    }
+}
   
   // ZkProgram
   export const PrivateMessage = Experimental.ZkProgram({
-    publicInput: Agent,
+    publicInput: ExtendedAgent,
     publicOutput: UInt64,
     methods: {
       process: {
         privateInputs: [Message],
   
-        method(agent: Agent, message: Message): UInt64 {
+        method(agent: ExtendedAgent, message: Message): UInt64 {
           // Check that the security code matches the agent's security code
           Bool.and(
             agent.securityCode.char0.equals(message.securityCode.char0),
@@ -87,10 +103,41 @@ import {
   @runtimeModule()
   export class SpyMaster extends RuntimeModule<SpyMasterConfig> {
     @state() public agents = StateMap.from<AgentId, Agent>(AgentId, Agent);
+  
+    @runtimeMethod()
+    public setLastMessage(agentId: AgentId, privateMessageProof: PrivateMessageProof) {
+      // Verify the proof of message validity
+      privateMessageProof.verify();
+      const agent = this.agents.get(agentId).value;
+      const newAgent = new Agent(
+          agent.agentId,
+          privateMessageProof.publicOutput,
+          agent.securityCode,
+      );
+      this.agents.set(agentId, newAgent);
+    }
+  
+    // Auxiliary method to add an agent for testing purposes
+    @runtimeMethod()
+    public addAgent(agentId: AgentId, securityCode: SecurityCode) {
+      this.agents.set(
+        agentId,
+        new Agent(
+          agentId,
+          UInt64.from(0),
+          securityCode,
+        ),
+      );
+    }
+  }
+
+  @runtimeModule()
+  export class ExtendedSpyMaster extends SpyMaster {
+    @state() public _agents = StateMap.from<AgentId, ExtendedAgent>(AgentId, ExtendedAgent);
     @state() public blockHeights = StateMap.from<UInt64, AgentId>(UInt64, AgentId);
   
     @runtimeMethod()
-    setLastMessage(agentId: AgentId, privateMessageProof: PrivateMessageProof) {
+    public override setLastMessage(agentId: AgentId, privateMessageProof: PrivateMessageProof) {
       // Verify the proof of message validity
       privateMessageProof.verify();
       const agent = this.agents.get(agentId).value;
@@ -99,20 +146,14 @@ import {
           transactionSender: this.transaction.sender,
           senderNonce: this.transaction.nonce,
           });
-      const newAgent = new Agent({
-          agentId: agent.agentId,
-          lastMessage: privateMessageProof.publicOutput,
-          securityCode: agent.securityCode,
-          blockInfo: block,
-      });
+      const newAgent = new ExtendedAgent(
+          agent.agentId,
+          privateMessageProof.publicOutput,
+          agent.securityCode,
+          block,
+      );
       this.agents.set(agentId, newAgent);
       this.blockHeights.set(block.blockHeight, agentId);
-    }
-
-    @runtimeMethod()
-    public getDatafromBlockHeight(blockHeight: UInt64): Agent {
-        const agentId = this.blockHeights.get(blockHeight).value;
-        return this.agents.get(agentId).value;
     }
   
     // Auxiliary method to add an agent for testing purposes
@@ -125,12 +166,12 @@ import {
           });
       this.agents.set(
         agentId,
-        new Agent({
-          agentId: agentId,
-          lastMessage: UInt64.from(0),
-          securityCode: securityCode,
-          blockInfo: block,
-        }),
+        new ExtendedAgent(
+          agentId,
+          UInt64.from(0),
+          securityCode,
+          block,
+        ),
       );
     }
   }
