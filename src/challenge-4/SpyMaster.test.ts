@@ -1,29 +1,22 @@
 import "reflect-metadata";
 import { TestingAppChain } from "@proto-kit/sdk";
 import {
-  SpyMaster, Agent, AgentId, Message, SecurityCode, PrivateMessage,
+  ExtendedSpyMaster,
+  Agent,
+  AgentId,
+  Message,
+  SecurityCode,
+  PrivateMessage,
 } from "./SpyMaster";
-import {
-  Field,
-  PrivateKey,
-  Nullifier,
-  MerkleMap,
-  Poseidon,
-  Bool,
-  Character,
-  UInt64,
-} from "o1js";
+import { Field, PrivateKey, MerkleMap, Poseidon, Bool, UInt64 } from "o1js";
 import { Balances } from "./Balances";
-import { Pickles } from "o1js/dist/node/snarky";
-import { dummyBase64Proof } from "o1js/dist/node/lib/proof_system";
-
 
 describe("SpyMaster", () => {
   let appChain: TestingAppChain<{
-    SpyMaster: typeof SpyMaster;
+    ExtendedSpyMaster: typeof ExtendedSpyMaster;
     Balances: typeof Balances;
   }>;
-  let spymaster: SpyMaster;
+  let spymaster: ExtendedSpyMaster;
   let balances: Balances;
 
   const aliceKey = PrivateKey.random();
@@ -36,11 +29,11 @@ describe("SpyMaster", () => {
   beforeAll(async () => {
     appChain = TestingAppChain.fromRuntime({
       modules: {
-        SpyMaster: SpyMaster,
+        ExtendedSpyMaster: ExtendedSpyMaster,
         Balances: Balances,
       },
       config: {
-        SpyMaster: {},
+        ExtendedSpyMaster: {},
         Balances: {},
       },
     });
@@ -49,19 +42,24 @@ describe("SpyMaster", () => {
 
     await appChain.start();
 
-    spymaster = appChain.runtime.resolve("SpyMaster");
+    spymaster = appChain.runtime.resolve("ExtendedSpyMaster");
     balances = appChain.runtime.resolve("Balances");
   });
 
   it("should add an agent", async () => {
     const tx = appChain.transaction(alice, () => {
-      spymaster.addAgent(AgentId.from(0), new SecurityCode({ char0: new Field(97), char1: new Field(98) }));
+      spymaster.addAgent(
+        AgentId.from(0),
+        new SecurityCode({ char0: new Field(97), char1: new Field(98) }),
+      );
     });
     await tx.sign();
     await tx.send();
     await appChain.produceBlock();
 
-    const agent = await appChain.query.runtime.SpyMaster.agents.get(AgentId.from(0));
+    const agent = await appChain.query.runtime.ExtendedSpyMaster.agents.get(
+      AgentId.from(0),
+    );
     expect(agent?.agentId).toEqual(AgentId.from(0));
     expect(agent?.lastMessage).toEqual(UInt64.from(0));
     expect(agent?.securityCode.char0).toEqual(new Field(97));
@@ -85,7 +83,9 @@ describe("SpyMaster", () => {
     });
     // Generate the proof of message validity
     await PrivateMessage.compile();
-    const agent = await appChain.query.runtime.SpyMaster.agents.get(AgentId.from(0)) as Agent;
+    const agent = (await appChain.query.runtime.ExtendedSpyMaster.agents.get(
+      AgentId.from(0),
+    )) as Agent;
     const privateMessageProof = await PrivateMessage.process(agent, message);
 
     const tx = appChain.transaction(alice, () => {
@@ -100,24 +100,39 @@ describe("SpyMaster", () => {
     expect(block).toBeTruthy();
     expect(block?.txs[0]?.status).toBeTruthy();
 
-    const new_agent = await appChain.query.runtime.SpyMaster.agents.get(
-        AgentId.from(0),
-      );
+    const new_agent = await appChain.query.runtime.ExtendedSpyMaster.agents.get(
+      AgentId.from(0),
+    );
 
     if (new_agent) {
-        expect(new_agent.lastMessage).toEqual(UInt64.from(1));
+      expect(new_agent.lastMessage).toEqual(UInt64.from(1));
     }
   }, 60000);
 
   it("should get the state details for a particular block height", async () => {
     const blockHeight = UInt64.from(2);
-    const agentId = await appChain.query.runtime.SpyMaster.blockHeights.get(blockHeight);
+    const agentId =
+      await appChain.query.runtime.ExtendedSpyMaster.blockHeights.get(
+        blockHeight,
+      );
     expect(agentId).toBeDefined();
     if (agentId !== undefined) {
-      const agent = await appChain.query.runtime.SpyMaster.agents.get(agentId);
-      expect(agent?.blockInfo.blockHeight).toEqual(blockHeight);
-      expect(agent?.blockInfo.transactionSender).toEqual(alice);
-      expect(agent?.blockInfo.senderNonce).toEqual(UInt64.from(0));
+      const agent =
+        await appChain.query.runtime.ExtendedSpyMaster.agentToBlockInfo.get(
+          agentId,
+        );
+
+      const blockInfo =
+        await appChain.query.runtime.ExtendedSpyMaster.agentToBlockInfo.get(
+          agentId,
+        );
+
+      expect(agent).toBeDefined();
+      expect(blockInfo).toBeDefined();
+
+      expect(blockInfo!.blockHeight).toEqual(blockHeight);
+      expect(blockInfo!.transactionSender).toEqual(alice);
+      expect(blockInfo!.senderNonce).toEqual(UInt64.from(0));
     }
   });
 
@@ -137,10 +152,14 @@ describe("SpyMaster", () => {
           char1: new Field(98),
         }),
       });
-        // Generate the proof of message validity
-        await PrivateMessage.compile();
-        const agent = await appChain.query.runtime.SpyMaster.agents.get(AgentId.from(0)) as Agent;
-        expect(() => PrivateMessage.process(agent, message)).rejects.toThrowError();
+      // Generate the proof of message validity
+      await PrivateMessage.compile();
+      const agent = (await appChain.query.runtime.ExtendedSpyMaster.agents.get(
+        AgentId.from(0),
+      )) as Agent;
+      expect(() =>
+        PrivateMessage.process(agent, message),
+      ).rejects.toThrowError();
     });
 
     it("message is shorter than 12 characters long", async () => {
@@ -160,8 +179,12 @@ describe("SpyMaster", () => {
       });
       // Generate the proof of message validity
       await PrivateMessage.compile();
-      const agent = await appChain.query.runtime.SpyMaster.agents.get(AgentId.from(0)) as Agent;
-      expect(() => PrivateMessage.process(agent, message)).rejects.toThrowError();
+      const agent = (await appChain.query.runtime.ExtendedSpyMaster.agents.get(
+        AgentId.from(0),
+      )) as Agent;
+      expect(() =>
+        PrivateMessage.process(agent, message),
+      ).rejects.toThrowError();
     });
 
     it("Should fail when the security code does not match", async () => {
@@ -181,8 +204,12 @@ describe("SpyMaster", () => {
       });
       // Generate the proof of message validity
       await PrivateMessage.compile();
-      const agent = await appChain.query.runtime.SpyMaster.agents.get(AgentId.from(0)) as Agent;
-      expect(() => PrivateMessage.process(agent, message)).rejects.toThrowError("Security code does not match");
+      const agent = (await appChain.query.runtime.ExtendedSpyMaster.agents.get(
+        AgentId.from(0),
+      )) as Agent;
+      expect(() => PrivateMessage.process(agent, message)).rejects.toThrowError(
+        "Security code does not match",
+      );
     });
 
     it("Should fail when the message number is not greater than the last message number", async () => {
@@ -202,8 +229,13 @@ describe("SpyMaster", () => {
       });
       // Generate the proof of message validity
       await PrivateMessage.compile();
-      const agent = await appChain.query.runtime.SpyMaster.agents.get(AgentId.from(0)) as Agent;
-      expect(() => PrivateMessage.process(agent, message)).rejects.toThrowError("Message number is not greater than the agent's last message");
+      const agent = (await appChain.query.runtime.ExtendedSpyMaster.agents.get(
+        AgentId.from(0),
+      )) as Agent;
+      expect(() => PrivateMessage.process(agent, message)).rejects.toThrowError(
+        "Message number is not greater than the agent's last message",
+      );
     });
   });
 });
+
