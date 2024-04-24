@@ -105,14 +105,20 @@ describe("SpyMaster", () => {
       );
 
     if (new_agent) {
-      expect(new_agent.lastMessage).toEqual(UInt64.from(1));
+        expect(new_agent.lastMessage).toEqual(UInt64.from(1));
     }
   }, 60000);
 
   it("should get the state details for a particular block height", async () => {
-    const blockHeight = UInt64.from(1);
-    const agent = await spymaster.getDatafromBlockHeight(blockHeight) as Agent;
-    expect(agent.agentId).toEqual(AgentId.from(0));
+    const blockHeight = UInt64.from(2);
+    const agentId = await appChain.query.runtime.SpyMaster.blockHeights.get(blockHeight);
+    expect(agentId).toBeDefined();
+    if (agentId !== undefined) {
+      const agent = await appChain.query.runtime.SpyMaster.agents.get(agentId);
+      expect(agent?.blockInfo.blockHeight).toEqual(blockHeight);
+      expect(agent?.blockInfo.transactionSender).toEqual(alice);
+      expect(agent?.blockInfo.senderNonce).toEqual(UInt64.from(0));
+    }
   });
 
   describe("Fail Cases", () => {
