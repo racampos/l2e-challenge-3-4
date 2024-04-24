@@ -23,7 +23,7 @@ cd learn-to-earn-challenge-3-4
 3. Install dependencies:
 
 ```sh
-pnpm install
+npm install
 ```
 
 ## Usage
@@ -31,7 +31,7 @@ pnpm install
 Run the tests
 
 ```sh
-pnpm test
+npm test
 ```
 
 ## How We Worked Together
